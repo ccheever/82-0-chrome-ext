@@ -25,7 +25,9 @@ The live-game scoring and strategy spec is
 site's spinner timers. For a plain-English walkthrough of the playing strategy
 itself — no formulas — see **[LLP 0003](./0003-how-to-go-82-0.guide.md)**, and for a
 by-position catalog of the players strong enough to start on an 82-0 team, see
-**[LLP 0004](./0004-82-0-team-candidates.reference.md)**.
+**[LLP 0004](./0004-82-0-team-candidates.reference.md)**. For the edges of the scoring
+system — the highest-rated team possible and why it still only goes 82-0 — see
+**[LLP 0005](./0005-scoring-system-edges.research.md)**.
 
 As features land, the non-obvious decisions behind them get captured as additional
 LLP documents and pointed at from the code with `@ref` annotations.
