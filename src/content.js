@@ -41,13 +41,18 @@
     }
   }
 
+  const STAT_KEYS = ["ppg", "rpg", "apg", "spg", "bpg"];
+  const hasCardStats = (card) => STAT_KEYS.some((k) => card[k] != null && !Number.isNaN(card[k]));
+
   // Merge dataset stats into a card (dataset wins; card is fallback for unknowns).
   function enrich(card) {
     const d = INDEX && INDEX.get(card.key);
+    const valueSource = d ? "dataset" : hasCardStats(card) ? "card" : "unknown";
     const p = d
       ? { n: card.n, t: card.t, d: card.d, pos: d.pos || card.pos, ppg: d.ppg, rpg: d.rpg, apg: d.apg, spg: d.spg, bpg: d.bpg, el: card.el }
       : { ...card };
-    p.val = engine.val(p);
+    p.val = valueSource === "unknown" ? null : engine.val(p);
+    p._valueSource = valueSource;
     return p;
   }
 
@@ -61,6 +66,12 @@
     pendingFromHint: null, lastTakeRec: null,
   };
 
+  function resetTrackedLineup() {
+    state.committed = [];
+    state.pendingFromHint = null;
+    state.lastTakeRec = null;
+  }
+
   function resolvePlayer(name, team, decade) {
     if (!name) return null;
     const d = INDEX && INDEX.get(`${board.norm(name)}|${team}|${decade}`);
@@ -69,25 +80,30 @@
   }
 
   function trackLineup(b) {
-    // new game / restart: round back to 1 (from >1 or from a completed screen)
-    if (b.phase !== "complete" && b.round === 1 &&
-        (state.prevPhase === "complete" || (state.prevRound != null && state.prevRound > 1))) {
-      state.committed = [];
-    }
+    const round = b.round ?? null;
+    const leavingCompletedGame = state.prevPhase === "complete" && b.phase !== "complete";
+    const roundRewoundToStart = round === 1 && state.prevRound != null && state.prevRound > 1;
+    // New game / restart: the page can briefly show no round while leaving the
+    // completed screen, so reset on the phase transition instead of waiting for R1.
+    if (leavingCompletedGame || roundRewoundToStart) resetTrackedLineup();
+
     // remember the in-flight pick from the hint
     if (b.placingName) {
       const p = resolvePlayer(b.placingName, b.team, b.decade);
       if (p) state.pendingFromHint = p;
     }
     // round advanced => a placement happened
-    if (b.round != null && state.prevRound != null && b.round > state.prevRound) {
+    if (round != null && state.prevRound != null && round > state.prevRound) {
       const placed = state.lastTakeRec || state.pendingFromHint;
       if (placed && placed._position) state.committed.push(placed);
       state.pendingFromHint = null;
       state.lastTakeRec = null;
     }
-    // keep committed length consistent with round when we can (don't fabricate stats)
-    state.prevRound = b.round;
+    // Keep committed length consistent with round when we can (don't fabricate stats).
+    // Preserve prevRound through transient no-round screens, except after completion,
+    // where the next non-complete screen is a fresh game.
+    if (round != null) state.prevRound = round;
+    else if (b.phase === "complete" || leavingCompletedGame) state.prevRound = null;
     state.prevPhase = b.phase;
   }
 
@@ -113,9 +129,7 @@
     document.documentElement.appendChild(root);
     root.querySelector(".c820-min").onclick = () => root.classList.toggle("c820-collapsed");
     root.querySelector("#c820-reset").onclick = () => {
-      state.committed = [];
-      state.pendingFromHint = null;
-      state.lastTakeRec = null;
+      resetTrackedLineup();
       render(lastBoard);
     };
     return root;
@@ -132,6 +146,62 @@
     if (lastRecCardEl) { lastRecCardEl.classList.remove("c820-rec"); lastRecCardEl = null; }
   }
 
+  // @ref LLP 0002#user-experience — annotate each live player card with the
+  // Standard-mode Val rating, using dataset stats in the extension and visible
+  // Classic-mode stats in the bookmarklet fallback.
+  function annotatePlayerValues(players) {
+    const liveCards = new Set(players.map((p) => p.el).filter(Boolean));
+    clearPlayerValueBadges(liveCards);
+    players.forEach((p) => {
+      if (!p.el) return;
+      const badge = ensureValueBadge(p.el);
+      const known = Number.isFinite(p.val);
+      badge.classList.toggle("unknown", !known);
+      badge.title = known
+        ? `82-0 Coach Val rating from ${p._valueSource === "dataset" ? "bundled" : "visible"} stats`
+        : "82-0 Coach Val rating unavailable without visible stats or bundled data";
+      badge.querySelector(".c820-val-num").textContent = known ? p.val.toFixed(1) : "--";
+    });
+  }
+
+  function clearPlayerValueBadges(keepCards) {
+    document.querySelectorAll(".c820-val-badge").forEach((badge) => {
+      const card = badge.closest('[draggable="true"]');
+      if (!keepCards || !keepCards.has(card)) badge.remove();
+    });
+    document.querySelectorAll(".c820-valued").forEach((card) => {
+      if (!keepCards || !keepCards.has(card)) card.classList.remove("c820-valued");
+    });
+  }
+
+  function ensureValueBadge(cardEl) {
+    cardEl.classList.add("c820-valued");
+    const existing = [...cardEl.querySelectorAll(".c820-val-badge")];
+    const badge = existing.shift() || createValueBadge();
+    existing.forEach((extra) => extra.remove());
+    const host = valueBadgeHost(cardEl);
+    if (badge.parentElement !== host) host.appendChild(badge);
+    return badge;
+  }
+
+  function createValueBadge() {
+    const badge = document.createElement("div");
+    badge.className = "c820-val-badge";
+    const num = document.createElement("span");
+    num.className = "c820-val-num";
+    const lab = document.createElement("span");
+    lab.className = "c820-val-label";
+    lab.textContent = "VAL";
+    badge.appendChild(num);
+    badge.appendChild(lab);
+    return badge;
+  }
+
+  function valueBadgeHost(cardEl) {
+    const statCells = [...cardEl.querySelectorAll('[class*="w-7"]')];
+    return statCells.length ? statCells[statCells.length - 1].parentElement : cardEl;
+  }
+
   function render(b) {
     ui();
     const A = root.querySelector("#c820-action");
@@ -142,6 +212,7 @@
     clearHighlight();
 
     if (!b || b.phase === "spinning") {
+      clearPlayerValueBadges();
       A.className = "c820-action wait"; A.textContent = "Spin the wheel...";
       R.textContent = b && b.round ? `Round ${b.round}/5 — waiting for a team + decade.` : "Waiting…";
       G.innerHTML = ""; ALT.innerHTML = "";
@@ -149,6 +220,7 @@
       return;
     }
     if (b.phase === "complete") {
+      clearPlayerValueBadges();
       const c = b.complete || {};
       A.className = "c820-action " + (c.is820 ? "take" : "restart");
       A.textContent = c.is820 ? "82-0. Perfect season." : `Game over — ${c.text || c.wins + " wins"}`;
@@ -159,6 +231,7 @@
 
     // selecting
     const pool = b.pool.map(enrich);
+    annotatePlayerValues(pool);
     const open = openPositions();
     const rec = policy.recommend({
       roster: state.committed, pool,

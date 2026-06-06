@@ -19,6 +19,8 @@ const sources = [
 const bootstrap = `(() => {
   document.querySelectorAll("#c820-coach").forEach((el) => el.remove());
   document.querySelectorAll(".c820-rec").forEach((el) => el.classList.remove("c820-rec"));
+  document.querySelectorAll(".c820-val-badge").forEach((el) => el.remove());
+  document.querySelectorAll(".c820-valued").forEach((el) => el.classList.remove("c820-valued"));
   document.getElementById("c820-bookmarklet-style")?.remove();
   globalThis.C820 = {};
   const style = document.createElement("style");

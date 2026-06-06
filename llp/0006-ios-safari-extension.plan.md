@@ -62,6 +62,9 @@ The bookmarklet inlines the coach scripts and CSS, so it can run on the HTTPS
 WebExtension runtime in a bookmarklet, bundled `players.json` is unavailable and
 the coach falls back to visible card stats. That makes the bookmarklet best for
 Classic mode; HoopIQ hides stats and needs the real extension packaging path.
+The card-level `VAL` annotations follow the same rule: the bookmarklet can compute
+them from Classic-mode visible stats, while hidden-stat modes should show the value
+as unavailable rather than inventing a zero.
 
 Bookmarklets run in the page's own context, so a strict Content-Security-Policy on
 `82-0.com` could block the injected `<style>` or inline code and leave the overlay

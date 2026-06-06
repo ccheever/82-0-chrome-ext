@@ -5,6 +5,7 @@
 **Systems:** Manifest, Content, UI, Strategy, Scoring, Game-Data
 **Author:** Charlie Cheever / Codex
 **Date:** 2026-06-06
+**Revised:** 2026-06-06
 **Related:** [LLP 0000](./0000-82-0-chrome-ext.explainer.md), [LLP 0001](./0001-82-0-team-strategy.spec.md)
 
 ## Product
@@ -31,7 +32,11 @@ When the user opens `https://82-0.com` and starts Classic or HoopIQ mode:
    - current round, pool, projected OVR/wins if taken, skip availability
    - top three alternatives
 4. The recommended player card is highlighted.
-5. The panel can be collapsed and the tracked lineup can be reset manually.
+5. Each visible player card is annotated with a compact `VAL` cell: the
+   Standard-mode `val` rating from [LLP 0001](./0001-82-0-team-strategy.spec.md#the-currency-player-value-val).
+   In the extension, this comes from the bundled dataset when available; in the
+   bookmarklet fallback, it comes from visible Classic-mode stats.
+6. The panel can be collapsed and the tracked lineup can be reset manually.
 
 The overlay should be useful in both Classic mode and HoopIQ. In HoopIQ, visible
 stats are hidden, so the content script enriches player rows from the bundled
@@ -76,6 +81,8 @@ observed in June 2026:
 - row text contains three `p` elements: player name, eligible positions, and
   `TEAM · DECADE`
 - Classic-mode stat cells show `PPG`, `RPG`, `APG`, `SPG`, `BPG`
+- the Coach may append a `.c820-val-badge` element to each current player row;
+  the board reader must ignore that augmentation when parsing future ticks
 - skip buttons are text buttons labeled `Team` and `Era`
 - the round label contains `Round N/5`
 - completion screens contain a final record and no draggable player rows
@@ -91,6 +98,8 @@ for scoring projections:
 - committed players are tracked when the round advances after a recommended take
 - each tracked player stores the target position recommended by the policy
 - open positions are derived from tracked target positions
+- the tracked roster is cleared when the page leaves a completed game, even before
+  the next `Round 1/5` label appears
 - if the user deviates from advice or the tracker drifts, the user can press
   `reset` and continue with round-local advice
 
