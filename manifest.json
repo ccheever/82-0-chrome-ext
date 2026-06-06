@@ -3,6 +3,15 @@
   "name": "82-0 Coach",
   "version": "0.1.0",
   "description": "Advisory overlay for public 82-0.com normal play.",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png",
+    "256": "icons/icon-256.png",
+    "512": "icons/icon-512.png",
+    "1024": "icons/icon-1024.png"
+  },
   "content_scripts": [
     {
       "matches": ["https://www.82-0.com/*", "https://82-0.com/*"],

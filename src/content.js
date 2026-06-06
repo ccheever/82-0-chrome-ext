@@ -17,9 +17,20 @@
 
   // ---- bundled dataset (for exact stats incl. HoopIQ where the page hides them) ----
   let INDEX = null; // key "name|team|decade" -> player
+  function extensionResourceURL(path) {
+    // @ref LLP 0006#webextension-api-compatibility — Safari may expose browser.* instead of chrome.*.
+    const runtime =
+      (globalThis.chrome && globalThis.chrome.runtime) ||
+      (globalThis.browser && globalThis.browser.runtime);
+    if (!runtime || typeof runtime.getURL !== "function") {
+      throw new Error("WebExtension runtime.getURL is unavailable");
+    }
+    return runtime.getURL(path);
+  }
+
   async function loadData() {
     try {
-      const url = chrome.runtime.getURL("src/data/players.json");
+      const url = extensionResourceURL("src/data/players.json");
       const rows = await (await fetch(url)).json();
       INDEX = new Map();
       for (const r of rows) INDEX.set(`${board.norm(r.n)}|${r.t}|${r.d}`, r);

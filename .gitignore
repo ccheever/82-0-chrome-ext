@@ -4,3 +4,11 @@
 # Node (only dev tooling; the extension itself is no-build)
 node_modules/
 npm-debug.log*
+
+# Packaging outputs
+dist/
+# Generated Safari/iOS Xcode wrapper — regenerate via scripts/package-safari-ios.sh (see LLP 0006)
+platforms/
+*.xcuserstate
+xcuserdata/
+DerivedData/

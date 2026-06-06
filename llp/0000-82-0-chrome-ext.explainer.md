@@ -131,6 +131,9 @@ add references once a module's design stabilizes.
 - **[LLP 0002 — Extension product](./0002-extension-product.spec.md)**
   *(Active)* — the advisory overlay product, manifest/permission scope, DOM contract,
   and non-goals.
+- **[LLP 0006 — iOS Safari extension packaging](./0006-ios-safari-extension.plan.md)**
+  *(Active)* — the iPhone install paths, Safari packaging script, mobile overlay
+  constraints, and generated Xcode wrapper.
 
 Decisions still to capture as they're made (write them when the reasoning is fresh,
 not preemptively):
