@@ -7,8 +7,9 @@
 import fs from "node:fs";
 
 await import("../src/lib/engine.js");
+await import("../src/lib/assign.js");
 await import("../src/lib/policy.js");
-export const { engine, policy } = globalThis.C820;
+export const { engine, policy, assign } = globalThis.C820;
 const { ACT } = policy;
 
 const rows = JSON.parse(fs.readFileSync(new URL("../src/data/players.json", import.meta.url), "utf8"));
@@ -108,21 +109,91 @@ export function playGame(env) {
   return { result: "guard", spins, k: roster.length };
 }
 
+// Play one game under Policy V2a (position-fluid). @ref LLP 0007#simulation-plan — carries
+// selectedPlayers + a live `assignment` instead of a fixed open-slot list, dedups by name, and
+// recomputes the assignment from the policy's recommended nextAssignment on each TAKE. The draw/
+// skip/restart structure mirrors playGame exactly (same env.draw call sites), so a given seed
+// produces the identical team/decade/pool sequence up to the first divergent decision.
+// Player NAMES are unique within a game, so the policy's idOf falls back to `n` as a stable id.
+export function playGameV2(env, movementRules = "empty-only") {
+  const selectedPlayers = [];
+  const used = new Set();
+  let assignment = null;
+  let teamSkipAvail = true;
+  let eraSkipAvail = true;
+  let spins = 0;
+  let takes = 0;
+  let moveSteps = 0;
+  let takesWithMove = 0;
+
+  let cur = env.draw(used);
+  spins++;
+  for (let guard = 0; guard < 64; guard++) {
+    const burden = { takes, moveSteps, takesWithMove };
+    if (!cur) return { result: "nodraw", spins, k: selectedPlayers.length, ...burden };
+    const rec = policy.recommend({
+      roster: selectedPlayers,
+      pool: cur.pool,
+      assignment,
+      movementRules,
+      teamSkipAvail,
+      eraSkipAvail,
+      decade: cur.d,
+    });
+
+    if (rec.action === ACT.TAKE) {
+      selectedPlayers.push({ ...rec.player });
+      used.add(rec.player.n);
+      assignment = rec.detail.nextAssignment ?? assignment;
+      takes++;
+      const mv = (rec.detail.moves && rec.detail.moves.length) || 0;
+      moveSteps += mv;
+      if (mv >= 1) takesWithMove++;
+      if (selectedPlayers.length === 5) {
+        const r = engine.teamResult(selectedPlayers);
+        return { result: r.is820 ? "win" : "short", spins, k: 5, teamOVR: r.teamOVR, takes, moveSteps, takesWithMove };
+      }
+      cur = env.draw(used);
+      spins++;
+    } else if (rec.action === ACT.TEAM_SKIP) {
+      teamSkipAvail = false;
+      cur = env.draw(used, { decade: cur.d, notTeam: cur.t });
+      spins++;
+    } else if (rec.action === ACT.ERA_SKIP) {
+      eraSkipAvail = false;
+      cur = env.draw(used, { team: cur.t, notDecade: cur.d });
+      spins++;
+    } else {
+      return { result: "restart", spins, k: selectedPlayers.length, takes, moveSteps, takesWithMove };
+    }
+  }
+  return { result: "guard", spins, k: selectedPlayers.length, takes, moveSteps, takesWithMove };
+}
+
 // Run `games` games on the CURRENT policy config and return summary stats.
 // Expected spins/games to a first 82-0 use the geometric identity (games are i.i.d.
 // because each fully resets): E[spins] = muWin + ((1-p)/p)*muLoss.
-export function runBatch({ games = 200000, seed = 1 } = {}) {
+export function runBatch({ games = 200000, seed = 1, movementRules = "empty-only" } = {}) {
   const env = makeEnv(seed);
+  // V1 (playGame, fixed open-slot list) vs V2a (playGameV2, position-fluid). Dispatch on the
+  // shipped flag so the existing simulate/validate/tune scripts keep measuring V1 unchanged.
+  const game = policy.CONST.positionFluid ? (e) => playGameV2(e, movementRules) : playGame;
   const tally = { win: 0, short: 0, restart: 0, nodraw: 0, guard: 0 };
   const restartByK = {};
   let winSpins = 0;
   let lossSpins = 0;
   let ovrSumComplete = 0;
   let completeCount = 0;
+  let totalTakes = 0;
+  let totalMoveSteps = 0;
+  let totalTakesWithMove = 0;
 
   for (let i = 0; i < games; i++) {
-    const g = playGame(env);
+    const g = game(env);
     tally[g.result]++;
+    totalTakes += g.takes || 0;
+    totalMoveSteps += g.moveSteps || 0;
+    totalTakesWithMove += g.takesWithMove || 0;
     if (g.result === "win") {
       winSpins += g.spins;
       ovrSumComplete += g.teamOVR;
@@ -149,5 +220,10 @@ export function runBatch({ games = 200000, seed = 1 } = {}) {
     games, seed, tally, restartByK, p, muWin, muLoss, muAll,
     meanOVR: completeCount ? ovrSumComplete / completeCount : 0,
     expGamesToWin, expSpinsToWin,
+    // V2a move burden (reported, never part of the spins objective). 0 for the V1 path.
+    moveBurden: {
+      meanMovesPerTake: totalTakes ? totalMoveSteps / totalTakes : 0,
+      shareTakesWithMove: totalTakes ? totalTakesWithMove / totalTakes : 0,
+    },
   };
 }

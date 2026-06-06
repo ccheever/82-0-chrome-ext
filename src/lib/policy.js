@@ -17,6 +17,8 @@
 (() => {
   const C820 = (globalThis.C820 = globalThis.C820 || {});
   const eng = () => C820.engine;
+  const A = () => C820.assign; // position-fluid matching solver; only used when cfg.positionFluid
+  let warnedNoAssign = false;
 
   // @ref LLP 0001#policy-v1 — constants are documented in LLP 0001's "Policy constants" table.
   // ANCHOR_MIN/SKIP_BELOW tuned (20->21, 18->17) by scripts/tune-policy.mjs +
@@ -30,6 +32,9 @@
     REACH_CEIL: null,  // optimistic-pace doom check; off by default — tuning showed no gain
     THIN_DECADES: ["1980s", "2000s"], // weakest top-end pools — escape via era-skip
     POSITION_PRIORITY: ["SG", "PG", "SF", "PF", "C"], // fill flexible stars into scarce slots
+    // @ref LLP 0007#candidate-evaluation — Policy V2a (position-fluid). OFF by default: the
+    // shipped extension runs V1 until the simulator (scripts/compare-policies.mjs) accepts V2a.
+    positionFluid: false,
   };
   let cfg = { ...DEFAULTS };
   const configure = (partial) => { cfg = { ...cfg, ...partial }; return cfg; };
@@ -49,10 +54,44 @@
     const k = roster.length; // slots already locked (0..4)
     const openPositions = normalizeOpenPositions(state.openPositions, roster);
 
-    const ranked = pool
-      .map((p) => ({ p, v: E.val(p), m: E.marginalOVR(roster, p), position: targetPosition(p, openPositions) }))
-      .filter((c) => c.position)
-      .sort((a, b) => b.m - a.m || b.v - a.v);
+    // @ref LLP 0007#candidate-evaluation — V2a (position-fluid): a candidate is placeable iff the
+    // selected set PLUS the candidate has ANY legal slot packing (bipartite matching), not whether
+    // it fills a currently-open slot. The take/skip decision uses hasLegalAssignment only; the
+    // target slot + move plan come from bestAssignment and are advisory. V1 is the default path.
+    const fluid = !!cfg.positionFluid && !!A();
+    if (cfg.positionFluid && !A() && !warnedNoAssign) {
+      warnedNoAssign = true;
+      console.warn("[82-0 Coach] positionFluid set but C820.assign is missing; falling back to V1.");
+    }
+    const currentAssignment = state.assignment ?? null;
+    const movementRules = state.movementRules || "empty-only";
+    const idOf = (p) => p.selectionId ?? p.id ?? p.n;
+    const nameKeyOf = (p) => p._nameKey ?? p.n;
+
+    let ranked;
+    const addAssignmentPlan = (c) => {
+      if (!fluid || !c || c.position) return;
+      c._plan = A().bestAssignment(roster.concat([c.p]), currentAssignment, idOf(c.p), movementRules, cfg, idOf);
+      c.position = c._plan ? c._plan.targetPosition : null;
+    };
+
+    if (fluid) {
+      const usedNames = new Set(roster.map(nameKeyOf)); // live game forbids duplicate names
+      ranked = pool
+        .filter((p) => !usedNames.has(nameKeyOf(p)))
+        .map((p) => ({
+          p, v: E.val(p), m: E.marginalOVR(roster, p),
+          legal: A().hasLegalAssignment(roster.concat([p]), idOf),
+          position: null, _plan: null,
+        }))
+        .filter((c) => c.legal)
+        .sort((a, b) => b.m - a.m || b.v - a.v); // IDENTICAL comparator to V1
+    } else {
+      ranked = pool
+        .map((p) => ({ p, v: E.val(p), m: E.marginalOVR(roster, p), position: targetPosition(p, openPositions) }))
+        .filter((c) => c.position)
+        .sort((a, b) => b.m - a.m || b.v - a.v);
+    }
 
     const thin = cfg.THIN_DECADES.includes(decade);
     const chooseSkip = () => {
@@ -78,7 +117,17 @@
       };
     }
 
-    const best = ranked[0];
+    // @ref LLP 0001#policy-v1 — pick 1's threshold is a `val` gate. A high-defense player can
+    // lead marginalOVR on an empty roster while sitting below ANCHOR_MIN; that must not hide an
+    // anchor-grade player whose `val` clears the threshold.
+    const pick1Anchors = k === 0 ? ranked.filter((c) => c.v >= cfg.ANCHOR_MIN) : [];
+    const byVal = (xs) => xs.slice().sort((a, b) => b.v - a.v || b.m - a.m);
+    const decisionRanked = k === 0 ? (pick1Anchors.length ? pick1Anchors : byVal(ranked)) : ranked;
+    // bestAssignment enumerates all packings, so only run it for the candidates we surface
+    // (best + the two alternatives). Target slot never affects the take/skip decision.
+    for (const c of decisionRanked.slice(0, 3)) addAssignmentPlan(c);
+
+    const best = decisionRanked[0];
     const v = best.v;
     const after = roster.concat([best.p]);
     const afterOVR = E.teamOVR(after);
@@ -89,9 +138,20 @@
     const detail = {
       round: k + 1, bestPlayer: best.p, bestVal: v,
       curOVR: E.teamOVR(roster), afterOVR, afterWins,
-      runningVal: T, top3: ranked.slice(0, 3),
+      runningVal: T, top3: decisionRanked.slice(0, 3),
       teamSkipAvail, eraSkipAvail, openPositions, targetPosition: best.position,
     };
+
+    // @ref LLP 0007#assignment-choice — on the fluid path, surface the chosen packing + the
+    // prerequisite move plan. moveStatus is advisory: 'reachable' (plan executes), 'manual'
+    // (legal packing exists but the empty-only plan can't reach it), or 'unknown' (no current
+    // assignment supplied). These are reported, never part of the take/skip decision.
+    if (fluid && best._plan) {
+      detail.nextAssignment = best._plan.assignment;
+      detail.moves = best._plan.moves;
+      detail.moveStatus = best._plan.moveStatus;
+      detail.moveCost = best._plan.moveCost;
+    }
 
     // ---- Pick 1: secure a strong anchor cheaply by restarting (preserve both skips). ----
     if (k === 0) {

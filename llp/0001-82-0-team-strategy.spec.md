@@ -150,9 +150,10 @@ val(player) = 100 * (
 ```
 
 `val` is not exactly the same as marginal teamOVR because teamOVR uses defensive
-averaging for SPG/BPG. The extension should rank final candidates by **true
-marginal teamOVR** against the currently tracked roster, with `val` as the stable
-display and threshold unit.
+averaging for SPG/BPG. The extension should use `val` as the stable display and
+threshold unit. For the first-pick anchor gate, apply `ANCHOR_MIN` in `val` units
+before ranking acceptable anchors by **true marginal teamOVR**; for later picks,
+preserve the tuned V1 marginal-OVR ranking flow.
 
 ## Data-Derived Scarcity
 
@@ -246,7 +247,8 @@ each selecting round:
     if no skip remains, restart
 
   if pick 1:
-    take the best placeable candidate only if val >= 20
+    find placeable candidates with val >= ANCHOR_MIN
+    if any exist, take the best anchor-grade candidate by marginal teamOVR, then val
     otherwise restart and preserve both skips
 
   if pick 5:
@@ -257,7 +259,7 @@ each selecting round:
   if after two locked picks the running val is below 40:
     restart
 
-  if best candidate val >= 18:
+  if best candidate val >= SKIP_BELOW:
     take it and place into the scarcest compatible open position
 
   otherwise:
