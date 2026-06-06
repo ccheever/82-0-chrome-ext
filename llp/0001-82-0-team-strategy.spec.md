@@ -270,12 +270,13 @@ Policy constants (as implemented in `src/lib/policy.js`):
 
 | Constant | Value | Meaning |
 |---|---:|---|
-| `ANCHOR_MIN` | 20 | Minimum first-pick `val` worth anchoring; below it, restart |
-| `SKIP_BELOW` | 18 | Weak-pool threshold after the anchor |
+| `ANCHOR_MIN` | 21 | Minimum first-pick `val` worth anchoring; below it, restart. Tuned from 20 — see [Tuning](#tuning) |
+| `SKIP_BELOW` | 17 | Weak-pool threshold after the anchor. Tuned from 18 |
 | `PACE2_MIN` | 40 | Minimum running `val` after two picks before a restart |
 | `TARGET_TEAM_OVR` | 109.5 | Rounded teamOVR needed for 82 wins (the real target) |
 | `TARGET_SUMVAL` | 108 | Sum-of-`val` proxy for the target; teamOVR runs ~1.3 above `Sum(val)` thanks to STL/BLK averaging, so `Sum(val) >= ~108` ≈ teamOVR 109.5 |
 | `GOOD_PER_PICK` | 26 | Optimistic per-remaining-pick `val`, used only for the on-pace note |
+| `REACH_CEIL` | null | Optional optimistic-pace doom check; `null` = off. Evaluated and left off — see [Tuning](#tuning) |
 | `THIN_DECADES` | 1980s, 2000s | Weakest top-end pools; prefer an Era-skip out of them |
 | `POSITION_PRIORITY` | SG, PG, SF, PF, C | Fill flexible stars into scarce slots |
 
@@ -291,24 +292,51 @@ Era skip per game with free restarts.
 node scripts/simulate-policy.mjs [games] [seed]   # defaults: 200000 1
 ```
 
-Measured over 200,000 games (stable across seeds):
+Measured over 200,000 games (mean over seeds 1–5; current tuned constants):
 
 | Metric | Value |
 |---|---:|
-| Per-game 82-0 rate | ~1.18% |
-| Games restarted at pick 1 (no `val >= 20` anchor) | ~70.5% |
-| Games finished below 82-0 | ~14.5% |
-| Mean teamOVR of finished games | ~100.0 |
-| Expected **games** to a first 82-0 | ~85 |
-| Expected **spins** (re-rolls) to a first 82-0 | ~205 |
+| Per-game 82-0 rate | ~1.1% |
+| Games restarted at pick 1 (no `val >= ANCHOR_MIN` anchor) | ~78% |
+| Games finished below 82-0 | ~14% |
+| Mean teamOVR of finished games | ~99 |
+| Expected **games** to a first 82-0 | ~90 |
+| Expected **spins** (re-rolls) to a first 82-0 | **~195** |
 
 Because each game fully resets (empty roster, both skips, i.i.d. draws), games are
 i.i.d., so games-to-first-82-0 is geometric in the per-game rate and the script reports
 the expectation analytically rather than by nesting episodes. Two caveats: the draw model
 assumes a uniform team×decade spin, which may not match the live site's distribution; and
-these figures characterize Policy V1, they do not prove it minimizes time. Lowering the
-expected-spins number — e.g. tuning `ANCHOR_MIN`/`SKIP_BELOW` or smarter skip timing — is
-the natural next iteration, and this script is how to measure any such change.
+these figures characterize the policy, they do not prove it minimizes time.
+
+### Tuning
+
+`scripts/tune-policy.mjs` sweeps a grid of policy constants over the shipped policy (via
+`C820.policy.configure()`) and ranks each config by the real objective — expected spins to
+a first 82-0. `scripts/validate-policy.mjs` re-runs the top candidates across several seeds,
+because the single-seed sweep's leader sits inside the noise band.
+
+```sh
+node scripts/tune-policy.mjs [games] [seed]            # rank a grid
+node scripts/validate-policy.mjs [games] [seeds]       # multi-seed confirm, e.g. 200000 1,2,3,4,5
+```
+
+What the sweep found:
+
+- **`ANCHOR_MIN` 20 → 21 and `SKIP_BELOW` 18 → 17** lower expected spins by **~4.4%**
+  (~204 → ~195, ranges non-overlapping across five seeds). The win raises the pick-1
+  restart bar slightly: per-game 82-0 rate actually *drops* (~1.18% → ~1.1%), but because
+  restarts are cheap (one spin) and the games that do play out waste less time, the *time
+  to your first 82-0* improves. The objective is fewest spins, not per-game win rate.
+- **`ANCHOR_MIN` past 21 reverses the gain** — 22 is roughly break-even, 23 is +12%, 24 is
+  +27%. Demanding a rare anchor means too many played-out games still can't finish.
+- **The optimistic-pace doom check (`REACH_CEIL`) does not help** and is left off. It does
+  what it was meant to — sub-82-0 finishes drop from ~14.5% to ~7% and mean teamOVR rises —
+  but expected spins is unchanged-to-slightly-worse: a run is only *provably* doomed once
+  its spins are already spent, and bailing early occasionally kills a winnable run, which
+  cancels the saving. The knob stays in `policy.js` (default `null`) for future tuning.
+- **`PACE2_MIN` 50 is far worse** (forces too many pick-2 restarts); 30–40 are within noise,
+  so it stays at 40.
 
 ## Extension Implementation Requirements
 

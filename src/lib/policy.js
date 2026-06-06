@@ -1,27 +1,41 @@
 // 82-0 decision policy — "what should I do right now?" for the advisory overlay.
 //
-// Policy V1 is a data-derived heuristic for the live Standard-mode game. It ranks
+// Policy is a data-derived heuristic for the live Standard-mode game. It ranks
 // candidates by true marginal teamOVR, preserves scarce positions for flexible players,
-// and uses simple anchor/skip/restart thresholds.
+// and uses anchor/skip/restart thresholds plus an optimistic-pace check that bails a
+// doomed run early instead of grinding it out below 82-0.
 // @ref LLP 0001#policy-v1
 //
 // Thresholds are in "val" units (engine.val): a player's additive contribution to teamOVR.
 // 82-0 needs teamOVR >= 109.5, i.e. roughly Sum(val) >= ~108 across the five picks
 // (teamOVR runs ~1.3 above Sum(val) thanks to STL/BLK averaging).
+//
+// Constants are overridable via C820.policy.configure({...}) — used by the simulator/
+// tuner (scripts/simulate-policy.mjs, scripts/tune-policy.mjs). The shipped extension
+// never calls configure(), so it runs on DEFAULTS.
 
 (() => {
   const C820 = (globalThis.C820 = globalThis.C820 || {});
   const eng = () => C820.engine;
 
-  // @ref LLP 0001#policy-v1
-  const ANCHOR_MIN = 20;   // pick 1: restart (don't skip) until best pool player >= this
-  const SKIP_BELOW = 18;   // picks 2-5: skip a pool whose best player is below this
-  const PACE2_MIN = 40;    // restart if total val after 2 picks is below this
-  const TARGET_SUMVAL = 108;
-  const GOOD_PER_PICK = 26; // optimistic per-remaining-pick val, for the pace note
-  const THIN_DECADES = ["1980s", "2000s"]; // weakest top-end pools — escape via era-skip
+  // @ref LLP 0001#policy-v1 — constants are documented in LLP 0001's "Policy constants" table.
+  // ANCHOR_MIN/SKIP_BELOW tuned (20->21, 18->17) by scripts/tune-policy.mjs +
+  // scripts/validate-policy.mjs: ~4.4% fewer spins to a first 82-0 vs the original V1.
+  const DEFAULTS = {
+    ANCHOR_MIN: 21,    // pick 1: restart (don't skip) until best pool player >= this
+    SKIP_BELOW: 17,    // picks 2-5: skip a pool whose best placeable player is below this
+    PACE2_MIN: 40,     // restart if total val after 2 picks is below this
+    TARGET_SUMVAL: 108, // sum-of-val proxy for teamOVR 109.5
+    GOOD_PER_PICK: 26, // optimistic per-remaining-pick val, for the pace note
+    REACH_CEIL: null,  // optimistic-pace doom check; off by default — tuning showed no gain
+    THIN_DECADES: ["1980s", "2000s"], // weakest top-end pools — escape via era-skip
+    POSITION_PRIORITY: ["SG", "PG", "SF", "PF", "C"], // fill flexible stars into scarce slots
+  };
+  let cfg = { ...DEFAULTS };
+  const configure = (partial) => { cfg = { ...cfg, ...partial }; return cfg; };
+  const reset = () => { cfg = { ...DEFAULTS }; return cfg; };
+
   const POSITIONS = ["PG", "SG", "SF", "PF", "C"];
-  const POSITION_PRIORITY = ["SG", "PG", "SF", "PF", "C"];
 
   const ACT = {
     TAKE: "TAKE", TEAM_SKIP: "TEAM_SKIP", ERA_SKIP: "ERA_SKIP", RESTART: "RESTART",
@@ -40,7 +54,7 @@
       .filter((c) => c.position)
       .sort((a, b) => b.m - a.m || b.v - a.v);
 
-    const thin = THIN_DECADES.includes(decade);
+    const thin = cfg.THIN_DECADES.includes(decade);
     const chooseSkip = () => {
       if (eraSkipAvail && (thin || !teamSkipAvail)) return ACT.ERA_SKIP;
       if (teamSkipAvail) return ACT.TEAM_SKIP;
@@ -81,7 +95,7 @@
 
     // ---- Pick 1: secure a strong anchor cheaply by restarting (preserve both skips). ----
     if (k === 0) {
-      if (v >= ANCHOR_MIN) {
+      if (v >= cfg.ANCHOR_MIN) {
         return {
           action: ACT.TAKE,
           player: best.p,
@@ -90,7 +104,7 @@
           detail,
         };
       }
-      return { action: ACT.RESTART, reason: `Pick-1 best is only ${v.toFixed(1)} val (<${ANCHOR_MIN}). Restart for a better anchor — keep both skips for the hard late picks.`, detail };
+      return { action: ACT.RESTART, reason: `Pick-1 best is only ${v.toFixed(1)} val (<${cfg.ANCHOR_MIN}). Restart for a better anchor — keep both skips for the hard late picks.`, detail };
     }
 
     // ---- Last pick: it's all about whether you finish at 82-0. ----
@@ -112,13 +126,32 @@
     }
 
     // ---- Middle picks (k = 1,2,3). ----
-    if (k === 2 && T < PACE2_MIN) {
-      return { action: ACT.RESTART, reason: `Behind pace — only ${T.toFixed(0)} val after 2 picks (want ≥ ${PACE2_MIN}). Restarting beats grinding out a doomed run.`, detail };
+    if (k === 2 && T < cfg.PACE2_MIN) {
+      return { action: ACT.RESTART, reason: `Behind pace — only ${T.toFixed(0)} val after 2 picks (want ≥ ${cfg.PACE2_MIN}). Restarting beats grinding out a doomed run.`, detail };
     }
 
-    if (v >= SKIP_BELOW) {
-      const need = TARGET_SUMVAL - T - v;
-      const onPace = need <= (slotsLeft - 1) * GOOD_PER_PICK;
+    // Optimistic-pace doom check: if even taking the best player here, plus the most we can
+    // realistically hope for from each remaining slot (REACH_CEIL), can't reach the target,
+    // the run is already lost — skip toward a stronger pool, or restart, rather than locking
+    // in a pick that grinds the season to a sub-82-0 finish. DISABLED by default
+    // (REACH_CEIL=null): it does cut sub-82-0 finishes, but tuning showed it does not reduce
+    // expected spins-to-82-0, because a doomed run is only provable once its spins are spent.
+    // @ref LLP 0001#tuning — kept behind the knob for future tuning.
+    if (cfg.REACH_CEIL != null) {
+      const needAfterBest = cfg.TARGET_SUMVAL - (T + v);
+      const optimisticRemaining = (slotsLeft - 1) * cfg.REACH_CEIL;
+      if (needAfterBest > optimisticRemaining) {
+        const skip = chooseSkip();
+        if (skip) {
+          return { action: skip, reason: `Off pace for 82-0 — even taking ${best.p.n} (val ${v.toFixed(1)}) leaves more than the last ${slotsLeft - 1} slot(s) can make up. ${skip === ACT.ERA_SKIP ? "Era" : "Team"}-skip for a stronger pool.`, detail };
+        }
+        return { action: ACT.RESTART, reason: `Off pace for 82-0 and no skips left (running ${T.toFixed(0)} val, best here ${v.toFixed(1)}). Restart.`, detail };
+      }
+    }
+
+    if (v >= cfg.SKIP_BELOW) {
+      const need = cfg.TARGET_SUMVAL - T - v;
+      const onPace = need <= (slotsLeft - 1) * cfg.GOOD_PER_PICK;
       const note = onPace ? "on pace for 82-0" : "slightly behind — aim high on the rest";
       return {
         action: ACT.TAKE,
@@ -160,12 +193,15 @@
   function targetPosition(player, openPositions) {
     const eligible = new Set(Array.isArray(player.pos) ? player.pos : []);
     if (eligible.has("UNK")) return null;
-    return POSITION_PRIORITY.find((p) => openPositions.includes(p) && eligible.has(p)) || null;
+    return cfg.POSITION_PRIORITY.find((p) => openPositions.includes(p) && eligible.has(p)) || null;
   }
 
   C820.policy = {
     recommend,
     ACT,
-    CONST: { ANCHOR_MIN, SKIP_BELOW, PACE2_MIN, TARGET_SUMVAL, THIN_DECADES, POSITION_PRIORITY },
+    configure,
+    reset,
+    DEFAULTS,
+    get CONST() { return { ...cfg }; },
   };
 })();
