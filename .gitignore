@@ -1,0 +1,6 @@
+# macOS
+.DS_Store
+
+# Node (only dev tooling; the extension itself is no-build)
+node_modules/
+npm-debug.log*

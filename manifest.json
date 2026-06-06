@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "82-0 Coach",
+  "version": "0.1.0",
+  "description": "Advisory overlay for public 82-0.com normal play.",
+  "content_scripts": [
+    {
+      "matches": ["https://www.82-0.com/*", "https://82-0.com/*"],
+      "run_at": "document_idle",
+      "css": ["src/overlay.css"],
+      "js": [
+        "src/lib/engine.js",
+        "src/lib/policy.js",
+        "src/lib/board.js",
+        "src/content.js"
+      ]
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["src/data/players.json"],
+      "matches": ["https://www.82-0.com/*", "https://82-0.com/*"]
+    }
+  ]
+}
