@@ -22,7 +22,8 @@ The live-game scoring and strategy spec is
 **[LLP 0001](./0001-82-0-team-strategy.spec.md)**. The first extension product is
 **[LLP 0002](./0002-extension-product.spec.md)**: an advisory overlay for public
 `82-0.com` normal play. It intentionally does not click the page or bypass the
-site's spinner timers.
+site's spinner timers. For a plain-English walkthrough of the playing strategy
+itself — no formulas — see **[LLP 0003](./0003-how-to-go-82-0.guide.md)**.
 
 As features land, the non-obvious decisions behind them get captured as additional
 LLP documents and pointed at from the code with `@ref` annotations.

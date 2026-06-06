@@ -6,7 +6,7 @@
 **Author:** Charlie Cheever / Codex
 **Date:** 2026-06-06
 **Revised:** 2026-06-06
-**Related:** [LLP 0000](./0000-82-0-chrome-ext.explainer.md), [LLP 0002](./0002-extension-product.spec.md), https://82-0.com
+**Related:** [LLP 0000](./0000-82-0-chrome-ext.explainer.md), [LLP 0002](./0002-extension-product.spec.md), [LLP 0003](./0003-how-to-go-82-0.guide.md) (plain-English companion), https://82-0.com
 
 ## Summary
 
