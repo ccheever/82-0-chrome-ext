@@ -220,8 +220,10 @@ to public-game scoring.
 ## Policy V1
 
 This is the policy the extension implements first. It is a strong, data-derived
-heuristic, not a proven optimal MDP solution. Before claiming exact expected times
-or "time optimality," commit and run a simulator against this policy.
+heuristic, not a proven optimal MDP solution. The simulator this once called for now
+exists (`scripts/simulate-policy.mjs`, see [Simulating Policy V1](#simulating-policy-v1)),
+so the performance figures here are *measured* against the shipped code — but they
+characterize this policy's behavior, they do not establish "time optimality."
 
 Inputs:
 
@@ -264,15 +266,49 @@ each selecting round:
     else restart early, or take best late with no skips
 ```
 
-Policy constants:
+Policy constants (as implemented in `src/lib/policy.js`):
 
 | Constant | Value | Meaning |
 |---|---:|---|
-| `ANCHOR_MIN` | 20 | Minimum first-pick `val` worth anchoring |
+| `ANCHOR_MIN` | 20 | Minimum first-pick `val` worth anchoring; below it, restart |
 | `SKIP_BELOW` | 18 | Weak-pool threshold after the anchor |
-| `PACE2_MIN` | 40 | Minimum running `val` after two picks |
-| `TARGET_TEAM_OVR` | 109.5 | Rounded teamOVR needed for 82 wins |
+| `PACE2_MIN` | 40 | Minimum running `val` after two picks before a restart |
+| `TARGET_TEAM_OVR` | 109.5 | Rounded teamOVR needed for 82 wins (the real target) |
+| `TARGET_SUMVAL` | 108 | Sum-of-`val` proxy for the target; teamOVR runs ~1.3 above `Sum(val)` thanks to STL/BLK averaging, so `Sum(val) >= ~108` ≈ teamOVR 109.5 |
+| `GOOD_PER_PICK` | 26 | Optimistic per-remaining-pick `val`, used only for the on-pace note |
+| `THIN_DECADES` | 1980s, 2000s | Weakest top-end pools; prefer an Era-skip out of them |
 | `POSITION_PRIORITY` | SG, PG, SF, PF, C | Fill flexible stars into scarce slots |
+
+### Simulating Policy V1
+
+`scripts/simulate-policy.mjs` imports the shipped `src/lib/engine.js` and
+`src/lib/policy.js` (so it measures the real code, not a re-implementation) and plays
+Policy V1 against a model of the live draw: each round spins a uniform populated
+`(team, decade)` pool, removes already-used player names, and honors one Team and one
+Era skip per game with free restarts.
+
+```sh
+node scripts/simulate-policy.mjs [games] [seed]   # defaults: 200000 1
+```
+
+Measured over 200,000 games (stable across seeds):
+
+| Metric | Value |
+|---|---:|
+| Per-game 82-0 rate | ~1.18% |
+| Games restarted at pick 1 (no `val >= 20` anchor) | ~70.5% |
+| Games finished below 82-0 | ~14.5% |
+| Mean teamOVR of finished games | ~100.0 |
+| Expected **games** to a first 82-0 | ~85 |
+| Expected **spins** (re-rolls) to a first 82-0 | ~205 |
+
+Because each game fully resets (empty roster, both skips, i.i.d. draws), games are
+i.i.d., so games-to-first-82-0 is geometric in the per-game rate and the script reports
+the expectation analytically rather than by nesting episodes. Two caveats: the draw model
+assumes a uniform team×decade spin, which may not match the live site's distribution; and
+these figures characterize Policy V1, they do not prove it minimizes time. Lowering the
+expected-spins number — e.g. tuning `ANCHOR_MIN`/`SKIP_BELOW` or smarter skip timing — is
+the natural next iteration, and this script is how to measure any such change.
 
 ## Extension Implementation Requirements
 
