@@ -27,7 +27,11 @@ itself — no formulas — see **[LLP 0003](./0003-how-to-go-82-0.guide.md)**, a
 by-position catalog of the players strong enough to start on an 82-0 team, see
 **[LLP 0004](./0004-82-0-team-candidates.reference.md)**. For the edges of the scoring
 system — the highest-rated team possible and why it still only goes 82-0 — see
-**[LLP 0005](./0005-scoring-system-edges.research.md)**.
+**[LLP 0005](./0005-scoring-system-edges.research.md)**. For the planned strategy upgrade
+that treats selected players as movable between eligible slots, see
+**[LLP 0007](./0007-position-fluid-strategy.plan.md)**. For the opt-in autopilot
+("Lazy Mode") that clicks the live UI for you — spin, take, place, skip, restart — see
+**[LLP 0008](./0008-lazy-autopilot.plan.md)**.
 
 As features land, the non-obvious decisions behind them get captured as additional
 LLP documents and pointed at from the code with `@ref` annotations.
@@ -134,10 +138,15 @@ add references once a module's design stabilizes.
 - **[LLP 0006 — iOS Safari extension packaging](./0006-ios-safari-extension.plan.md)**
   *(Active)* — the iPhone install paths, Safari packaging script, mobile overlay
   constraints, and generated Xcode wrapper.
+- **[LLP 0007 — Position-fluid strategy](./0007-position-fluid-strategy.plan.md)**
+  *(Draft)* — how a future Policy V2 should model movable selected players, assignment
+  diffs, and simulation-tuned positional option value.
+- **[LLP 0008 — Lazy Mode (Autopilot)](./0008-lazy-autopilot.plan.md)**
+  *(Draft)* — the opt-in auto-play layer; the decision to click the live UI rather than
+  patch React state or bypass timers, plus the action vocabulary and safety model.
 
 Decisions still to capture as they're made (write them when the reasoning is fresh,
 not preemptively):
 
-- Autopilot and whether it clicks DOM controls or hooks app state *(not yet written)*
 - Persistent settings / run stats and `chrome.storage` schema *(not yet written)*
 - Popup/options UI *(not yet written)*

@@ -12,7 +12,29 @@
   display: flex; align-items: center; gap: 6px; padding: 7px 12px;
   font-weight: 800; letter-spacing: 0.08em; font-size: 11px; color: #aab1c4;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  flex-wrap: wrap;
 }
+/* @ref LLP 0008#safety-model — Manual/Assist/Auto control + active-level badge */
+#c820-coach .c820-lazy {
+  display: inline-flex; gap: 2px; margin-left: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 6px; overflow: hidden;
+}
+#c820-coach .c820-lazy-btn {
+  background: rgba(255, 255, 255, 0.04); border: 0; color: #8b93a7;
+  font-size: 9px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase;
+  padding: 3px 7px; cursor: pointer;
+}
+#c820-coach .c820-lazy-btn:hover { color: #e6e8ee; background: rgba(255, 255, 255, 0.08); }
+#c820-coach .c820-lazy-btn.active { color: #0b0d14; background: #f59e0b; }
+#c820-coach.c820-lazy-assist .c820-lazy-btn[data-level="assist"].active { background: #3b82f6; color: #eff6ff; }
+#c820-coach.c820-lazy-auto .c820-lazy-btn[data-level="auto"].active { background: #22c55e; color: #062012; }
+#c820-coach .c820-lazy-badge {
+  padding: 5px 12px; font-size: 10px; font-weight: 800; letter-spacing: 0.04em;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+#c820-coach.c820-lazy-assist .c820-lazy-badge { background: rgba(59, 130, 246, 0.14); color: #93c5fd; }
+#c820-coach.c820-lazy-auto .c820-lazy-badge { background: rgba(34, 197, 94, 0.14); color: #7ef0a6; }
+#c820-coach.c820-lazy-paused .c820-lazy-badge { background: rgba(239, 68, 68, 0.14); color: #fca5a5; }
 #c820-coach .c820-logo {
   background: linear-gradient(90deg, #f59e0b, #ef4444); color: #0b0d14;
   font-weight: 900; padding: 1px 6px; border-radius: 5px; letter-spacing: 0;
@@ -39,6 +61,22 @@
 #c820-coach .c820-reason {
   grid-column: 2; grid-row: 1; align-self: center;
   color: #c4c9d6; font-size: 12px; line-height: 1.3;
+}
+#c820-coach .c820-moves {
+  grid-column: 1 / -1;
+  display: grid; gap: 3px;
+}
+#c820-coach .c820-moves:empty { display: none; }
+#c820-coach .c820-moves-title {
+  font-size: 9px; text-transform: uppercase; letter-spacing: 0.05em; color: #8b93a7;
+}
+#c820-coach .c820-move {
+  padding: 4px 6px; border-radius: 5px;
+  background: rgba(245, 158, 11, 0.12); color: #f3c074;
+  font-size: 12px; font-weight: 700;
+}
+#c820-coach .c820-move.warn {
+  background: rgba(239, 68, 68, 0.12); color: #ffb4b4;
 }
 #c820-coach .c820-grid {
   grid-column: 1 / -1;
@@ -114,9 +152,12 @@
     width: auto; max-height: 44vh;
   }
   #c820-coach .c820-hd { padding: 8px 10px; }
+  #c820-coach .c820-lazy { margin-left: 0; }
+  #c820-coach .c820-lazy-btn { padding: 4px 8px; font-size: 10px; }
   #c820-coach .c820-body { padding: 10px; gap: 7px; grid-template-columns: 1fr; }
   #c820-coach .c820-action { grid-column: 1; grid-row: 1; font-size: 16px; padding: 7px 9px; }
   #c820-coach .c820-reason { grid-column: 1; grid-row: 2; font-size: 12px; }
+  #c820-coach .c820-moves { grid-column: 1; }
   #c820-coach .c820-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   #c820-coach .c820-alts { grid-template-columns: 1fr; }
   #c820-coach .c820-v { font-size: 12px; }

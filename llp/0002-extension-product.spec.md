@@ -28,15 +28,19 @@ When the user opens `https://82-0.com` and starts Classic or HoopIQ mode:
 3. During selection, it shows:
    - primary action: `TAKE`, `TEAM-SKIP`, `ERA-SKIP`, or `RESTART`
    - recommended player and target position when taking
+   - prerequisite player moves before placement, when a position-fluid assignment improves the
+     lineup and the move plan is known
    - reason text
    - current round, pool, projected OVR/wins if taken, skip availability
    - top three alternatives
-4. The recommended player card is highlighted.
-5. Each visible player card is annotated with a compact `VAL` cell: the
+4. During placement after a player card has been selected, it keeps showing the target
+   court position for that player.
+5. The recommended player card is highlighted.
+6. Each visible player card is annotated with a compact `VAL` cell: the
    Standard-mode `val` rating from [LLP 0001](./0001-82-0-team-strategy.spec.md#the-currency-player-value-val).
    In the extension, this comes from the bundled dataset when available; in the
    bookmarklet fallback, it comes from visible Classic-mode stats.
-6. The panel can be collapsed and the tracked lineup can be reset manually.
+7. The panel can be collapsed and the tracked lineup can be reset manually.
 
 The overlay should be useful in both Classic mode and HoopIQ. In HoopIQ, visible
 stats are hidden, so the content script enriches player rows from the bundled
@@ -85,6 +89,12 @@ observed in June 2026:
   the board reader must ignore that augmentation when parsing future ticks
 - skip buttons are text buttons labeled `Team` and `Era`
 - the round label contains `Round N/5`
+- the placement hint contains `Placing {Name} — select a court position`; the reader reports
+  this as a distinct placement phase so the overlay can continue showing the target slot after
+  the selected player card leaves the pool
+- court slots are identified by `PG`, `SG`, `SF`, `PF`, `C` labels plus aria/data-position
+  fallbacks; when an occupant can be read from inside a slot, the content script may use it to
+  refresh the tracked assignment map
 - completion screens contain a final record and no draggable player rows
 
 When the live site changes, update `src/lib/board.js` and this section together.
@@ -97,6 +107,8 @@ for scoring projections:
 
 - committed players are tracked when the round advances after a recommended take
 - each tracked player stores the target position recommended by the policy
+- when readable court-slot occupants are available, the assignment map is refreshed from the
+  actual DOM; low-confidence neighboring-card matches may only update already tracked players
 - open positions are derived from tracked target positions
 - the tracked roster is cleared when the page leaves a completed game, even before
   the next `Round 1/5` label appears
@@ -118,7 +130,9 @@ clicks. That is why this release remains advisory.
 
 Write a new LLP before implementing any of these:
 
-- autopilot and whether it clicks the DOM or hooks app state
+- autopilot and whether it clicks the DOM or hooks app state — **done:
+  [LLP 0008](./0008-lazy-autopilot.plan.md)** (Lazy Mode; clicks the DOM, does not patch
+  state or bypass timers)
 - persistent settings/run stats and `chrome.storage` schema
 - popup/options UI
 - support for adjusted/testMode or Vercel clone analysis mode

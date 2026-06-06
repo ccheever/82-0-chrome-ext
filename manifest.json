@@ -19,8 +19,10 @@
       "css": ["src/overlay.css"],
       "js": [
         "src/lib/engine.js",
+        "src/lib/assign.js",
         "src/lib/policy.js",
         "src/lib/board.js",
+        "src/lib/actuator.js",
         "src/content.js"
       ]
     }
