@@ -6,7 +6,7 @@
 **Author:** Charlie Cheever / Codex
 **Date:** 2026-06-06
 **Revised:** 2026-06-06
-**Related:** [LLP 0000](./0000-82-0-chrome-ext.explainer.md), [LLP 0002](./0002-extension-product.spec.md), [Safari Extensions](https://developer.apple.com/safari/extensions/), [Packaging & distributing Safari Web Extensions with App Store Connect](https://developer.apple.com/documentation/safariservices/packaging-and-distributing-safari-web-extensions-with-app-store-connect)
+**Related:** [LLP 0000](./0000-82-0-chrome-ext.explainer.md), [LLP 0002](./0002-extension-product.spec.md), [Safari Extensions](https://developer.apple.com/safari/extensions/), [Packaging & distributing Safari Web Extensions with App Store Connect](https://developer.apple.com/documentation/safariservices/packaging-and-distributing-safari-web-extensions-with-app-store-connect), [Expo EAS internal distribution](https://docs.expo.dev/build/internal-distribution/), [Expo EAS iOS app extensions](https://docs.expo.dev/build-reference/app-extensions/)
 
 ## Goal
 
@@ -67,6 +67,26 @@ Bookmarklets run in the page's own context, so a strict Content-Security-Policy 
 `82-0.com` could block the injected `<style>` or inline code and leave the overlay
 unstyled or inert. The extension paths run in an isolated world that is exempt from
 page CSP, so they stay the reliable option; treat the bookmarklet as best-effort.
+
+### EAS Services Evaluation
+
+Expo EAS can create iOS internal-distribution builds with shareable install URLs,
+and EAS can handle app-extension credentials for bare projects. That sounds close
+to the desired "install from my phone" flow, but it does **not** remove Apple's
+signing rules:
+
+- iOS internal EAS builds still use ad hoc or enterprise provisioning, and ad hoc
+  builds only install on registered device UDIDs.
+- EAS needs Apple Developer credentials, App Store Connect credentials, or
+  previously configured EAS-managed credentials to create the provisioning profile.
+- This repo is not an Expo or React Native app. EAS could be made to build a bare
+  Xcode project or a custom build, but that would be extra packaging infrastructure
+  around the Safari wrapper, not a shortcut around signing.
+
+For this project, EAS is useful only after Apple credentials are available and if a
+shareable ad hoc URL is preferred over Apple's Safari Web Extension Packager /
+TestFlight path. Until then, the bookmarklet is the only no-signing iPhone trial
+path.
 
 ## Implementation Plan
 
@@ -140,6 +160,18 @@ For local device testing:
 6. On the iPhone, enable the extension in Safari extension settings and grant it
    access to `82-0.com`.
 
+Observed from SSH on 2026-06-06: the Mac could see the iPhone as a paired
+local-network device with Developer Mode enabled and app-install capability, but
+device builds failed because Xcode was not signed into the installed Apple
+Development teams and had no provisioning profiles for either bundle identifier:
+
+- `com.ccheever.eightytwozero.coach`
+- `com.ccheever.eightytwozero.coach.Extension`
+
+The fix is signing/account setup, not code: open Xcode's Accounts settings on the
+Mac, sign into the Apple Developer account for the intended team, then rerun the
+device build or run from Xcode.
+
 For phone-originated install:
 
 1. Upload `dist/82-0-coach-safari-web-extension.zip` through App Store Connect's
@@ -147,6 +179,16 @@ For phone-originated install:
 2. Configure the resulting app for TestFlight distribution.
 3. Open the TestFlight invitation on the iPhone, install the app, then enable the
    Safari extension and grant access to `82-0.com`.
+
+For the bookmarklet trial:
+
+1. Run `scripts/build-mobile-bookmarklet.mjs`.
+2. Serve `dist/` from the Mac on a LAN-reachable port, for example
+   `python3 -m http.server 8765 --bind 0.0.0.0 --directory dist`.
+3. Open `http://<mac-lan-ip>:8765/82-0-coach-mobile-bookmarklet.html` on the
+   iPhone.
+4. Copy the bookmarklet, create/edit a Safari bookmark with that `javascript:`
+   URL, open `https://82-0.com`, start Classic mode, then run the bookmark.
 
 ## WebExtension API Compatibility
 
@@ -213,6 +255,10 @@ Reviewed and revised during implementation on 2026-06-06.
   TestFlight/App Store path; raw Mobile Safari installation is not supported.
 - The bookmarklet trial path runs without Apple signing, but it is Classic-mode
   oriented because it cannot load the extension's bundled dataset.
+- Physical device build was attempted from SSH against a paired iPhone and blocked
+  only by missing Xcode account/provisioning profiles.
+- EAS was evaluated and is not a signing bypass; it remains a possible future ad
+  hoc distribution wrapper once Apple credentials are available.
 
 ### Independent review — 2026-06-06
 
@@ -235,5 +281,6 @@ Changed this pass:
 - Sharpened the distribution wording and added the App Store Connect packaging doc link.
 - Noted that a strict page CSP can limit the bookmarklet.
 
-Not re-verified here: a full `xcodebuild` of the generated project on the iOS Simulator —
-the author's "builds for iOS Simulator" claim above stands; rebuild to confirm after a change.
+Re-verified here: the generated project builds for iOS Simulator with signing
+disabled. Physical device installation remains unverified until Apple account /
+provisioning setup is completed.
