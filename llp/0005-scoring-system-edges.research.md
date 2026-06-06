@@ -86,6 +86,10 @@ Two honest caveats:
 
 **The bookend:** the ceiling team carries ~46% more raw player value than the floor team (summed `val` 120.6 vs 82.6), and the scoreboard shows both an identical 82-0. Everything above teamOVR 110 is invisible to the game — and so is the gulf between a stacked roster and four bargains propping up one shot-blocker.
 
+![The floor team's 82-0 result card — five players, teamOVR 109.5, record 82-0.](../assets/worst-82-0-team.png)
+
+*Faithful render of this roster's result card, scored by the real engine — not an actual 82-0.com result. Regenerate with `node scripts/render-team-card.mjs`, then screenshot `dist/team-card.html`.*
+
 ## The win cap: greatness the game never pays for
 
 A bare-minimum 82-0 team just clears the rounding threshold of **teamOVR 109.5**. The ceiling team is **+29.9 OVR higher (~27%)**. But the win curve `wins = round(82 · min(teamOVR/110, 1)^1.15)` **caps at 82 wins once teamOVR reaches 110** ([LLP 0001](./0001-82-0-team-strategy.spec.md#win-curve)). The ceiling team sits **29.4 points above that cap**.
