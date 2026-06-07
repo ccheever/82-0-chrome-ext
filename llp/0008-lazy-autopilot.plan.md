@@ -262,7 +262,9 @@ current actuator contract:
   the inner button. The board reader exposes `slotParts` through `b.slots[position]` as
   `clickEl` / `el` for placement, `dragEl` for a current occupant, and `dropEl` for
   existing-player moves. Mobile bottom-sheet position buttons are also found through the
-  same label-based lookup.
+  same label-based lookup. The player-pool position filters use the same text labels
+  (`PG/SG/SF/PF/C`), so slot lookup must prefer large court/bottom-sheet controls and
+  exclude small sibling filter buttons.
 - **Existing-player moves** — live desktop court movement is HTML5 drag/drop: dispatch
   `dragstart` on the source slot/occupant, then `dragenter` / `dragover` / `drop` on the
   target slot, followed by `dragend`. The actuator uses this only for
@@ -378,11 +380,14 @@ load-bearing, not decorative.
   `event.isTrusted` (and ignore the actuator's own synthetic events) so Lazy Mode does not
   pause itself after every click. Resuming is another explicit opt-in. The human always wins
   a race with the machine.
-- **Runaway caps (Auto especially).** A ceiling on gestures-per-minute and a halt after K
-  consecutive no-progress ticks. Because Assist can now reload weak runs, both active
-  levels carry **max-games / max-spins budgets** after which they halt and report. **Auto**
-  still has the heavier risk because it also loops through completed short games until
-  82-0.
+- **Runaway caps (Auto especially).** A high ceiling on gestures-per-minute
+  (`180/min` as of 2026-06-07) and a halt after K consecutive no-progress ticks. The
+  ceiling is deliberately above normal Assist throughput because one weak-run cycle can
+  legitimately include reload, Play Classic, Spin, card select, and slot placement. The
+  no-progress watchdog is the primary stuck-page protection. Because Assist can now reload
+  weak runs, both active levels carry **max-games / max-spins budgets** after which they
+  halt and report. **Auto** still has the heavier risk because it also loops through
+  completed short games until 82-0.
 - **Stop on anomaly.** Unexpected DOM (an unrecognized modal, a missing slot, a stall) →
   halt + advisory + reason. Fail safe and visible, never thrash.
 - **Stop on uncertain movement.** A TAKE with a non-empty move plan whose

@@ -172,6 +172,53 @@
     return !r || r.width > 0 || r.height > 0;
   }
 
+  function classText(el) {
+    return typeof el?.className === "string" ? el.className : "";
+  }
+
+  function positionButtonSiblingCount(el) {
+    const parent = el?.parentElement;
+    if (!parent?.querySelectorAll) return 0;
+    return [...parent.querySelectorAll("button")]
+      .filter((b) => POSITIONS.includes(txt(b)))
+      .length;
+  }
+
+  function courtAncestor(el, position) {
+    let cur = el?.parentElement || null;
+    while (cur && cur !== document.body) {
+      if (
+        slotLabel(cur) === position &&
+        !inCoach(cur) &&
+        !isPoolPlayerCard(cur) &&
+        (
+          cur.getAttribute?.("draggable") === "true" ||
+          /\babsolute\b/.test(classText(cur)) ||
+          cur.getAttribute?.("role") === "button"
+        )
+      ) {
+        return cur;
+      }
+      cur = cur.parentElement;
+    }
+    return null;
+  }
+
+  function looksLikePlacementButton(el) {
+    const c = classText(el);
+    return /\bh-16\b|\bw-16\b|\brounded-xl\b/.test(c);
+  }
+
+  function isPositionFilterButton(el, position) {
+    return (
+      el?.tagName === "BUTTON" &&
+      txt(el) === position &&
+      !looksLikePlacementButton(el) &&
+      !courtAncestor(el, position) &&
+      positionButtonSiblingCount(el) >= 4
+    );
+  }
+
   function slotCandidates(position) {
     if (!POSITIONS.includes(position)) return [];
     const aria = [
@@ -185,28 +232,13 @@
       .filter((el) => {
         if (seen.has(el)) return false;
         seen.add(el);
-        return isUsable(el) && slotLabel(el) === position;
+        return isUsable(el) && slotLabel(el) === position && !isPositionFilterButton(el, position);
       });
   }
 
   function courtSlotContainer(clickEl, position, candidates) {
-    let cur = clickEl;
-    while (cur && cur !== document.body) {
-      if (
-        cur !== clickEl &&
-        slotLabel(cur) === position &&
-        !inCoach(cur) &&
-        !isPoolPlayerCard(cur) &&
-        (
-          cur.getAttribute?.("draggable") === "true" ||
-          /\babsolute\b/.test(cur.className || "") ||
-          cur.getAttribute?.("role") === "button"
-        )
-      ) {
-        return cur;
-      }
-      cur = cur.parentElement;
-    }
+    const ancestor = courtAncestor(clickEl, position);
+    if (ancestor) return ancestor;
     return (
       candidates.find((el) => el.getAttribute?.("draggable") === "true") ||
       candidates.find((el) => el.getAttribute?.("role") === "button") ||
@@ -215,12 +247,26 @@
     );
   }
 
+  function slotCandidateScore(el, position) {
+    let score = 0;
+    if (el.tagName === "BUTTON") score += 10;
+    if (!el.disabled) score += 2;
+    if (el.getAttribute?.("data-position") === position) score += 20;
+    if ((el.getAttribute?.("aria-label") || "").startsWith(position)) score += 20;
+    if (looksLikePlacementButton(el)) score += 40;
+    const ancestor = courtAncestor(el, position);
+    if (ancestor) {
+      score += 80;
+      if (/\babsolute\b/.test(classText(ancestor))) score += 30;
+    }
+    return score;
+  }
+
   function slotParts(position) {
     const candidates = slotCandidates(position);
-    const button = candidates.find((el) => el.tagName === "BUTTON" && !el.disabled) ||
-      candidates.find((el) => el.tagName === "BUTTON") ||
-      candidates.find((el) => el.getAttribute?.("role") === "button") ||
-      candidates[0] ||
+    const button = candidates
+      .slice()
+      .sort((a, b) => slotCandidateScore(b, position) - slotCandidateScore(a, position))[0] ||
       null;
     const container = courtSlotContainer(button, position, candidates);
     const dragEl =
